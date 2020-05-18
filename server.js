@@ -20,12 +20,15 @@ let AppState = {
   voteDeadline: 0,
   citizens: 0,
   votedMap: {},
+  fireCount: 0,
 }
 
 const ClientActions = {
   SuggestSong: 11,
   VoteYay: 12,
   VoteNay: 13,
+  VoteFire: 14,
+  PlaybackDone: 15,
 }
 
 const clients = [];
@@ -38,6 +41,7 @@ const broadcast = () => {
 
 let votingTimer = null;
 let pendingVideoID = "";
+let durationMS = 0;
 
 wss.on('connection', function connection(socket) {
   const ws = socket;
@@ -66,6 +70,9 @@ wss.on('connection', function connection(socket) {
           votesNeeded = Math.floor(wss.clients.size / 2) + 1;
           voteDeadline = Date.now() + VotingTimeMS;
           lastVoteTime = Date.now();
+
+          const durationIndex = stdout.indexOf('approxDurationMs');
+          durationMs = parseInt(stdout.slice(durationIndex, stdout.indexOf(",", durationIndex)).match(/[0-9]+/)[0]);
 
           AppState = {
             ...AppState,
@@ -119,6 +126,20 @@ wss.on('connection', function connection(socket) {
               clearTimeout(votingTimer);
               votingTimer = null;
             }
+            setTimeout(() => {
+              AppState = {
+                currentSuggestion: "",
+                currentSuggestionThumbnail: "",
+                videoIDToPlay: "",
+                lastVoteTime: 0,
+                votesNeeded: 0,
+                voteDeadline: 0,
+                citizens: 0,
+                votedMap: {},
+                fireCount: 0,
+              }
+              broadcast();
+            }, durationMs + 30000);
             break;
           }
 
@@ -163,6 +184,16 @@ wss.on('connection', function connection(socket) {
             }
             break;
           }
+          break;
+
+        case ClientActions.VoteFire:
+          console.log("Voted Fire");
+          let newFireCount = AppState.fireCount + 1;
+          AppState = {
+            ...AppState,
+            fireCount: newFireCount,
+          }
+          broadcast();
           break;
     }
   });
