@@ -32,6 +32,7 @@ class App extends Component {
       citizens: 0,
       votedMap: {},
       fireCount: 0,
+      fraudDetected: false,
     }
   }
 
@@ -42,28 +43,46 @@ class App extends Component {
   }
 
   componentDidMount() {
-    const ws = new WebSocket('ws://localhost:8085');
+    const ws = new WebSocket(`ws://${location.hostname}:8085`);
     ws.addEventListener('open', () => {
       ws.addEventListener('message', (data) => {
-        console.log("Received message:", data.data);
+        console.log("Received message:");
+        console.log(JSON.stringify(JSON.parse(data.data), null, 2));
         this.setState(JSON.parse(data.data));
       });
 
       ws.addEventListener('close', (data) => {
-        console.log("Server shutdown");
         setTimeout(() => { location.reload() }, 1000);
       });
     });
     this.ws = ws;
+    window.admin = (message) => { ws.send(message); }
+
+    const fraudDetector = new BroadcastChannel('fraud_detector');
+    fraudDetector.addEventListener("message", (evt) => {
+      if (evt.data === "pong") {
+        this.setState({ fraudDetected: true });
+      } else {
+        fraudDetector.postMessage("pong");
+      }
+    });
+    fraudDetector.postMessage("ping");
+
   }
 
   render() {
+    if (this.state.fraudDetected) {
+      return h('div', { class: 'fraud-alert' }, "VOTER FRAUD DETECTED");
+    }
+
+
     return h('div', { class: 'main' },
       h('h1', { key: 'header' }, 'Welcome to the Democratic Dance Party'),
-      h(SongSuggestion, { key: 'suggestion', title: this.state.currentSuggestion, thumbnail: this.state.currentSuggestionThumbnail }),
       h(SubmitSong, { key: 'submit', ws: this.ws, currentSuggestion: this.state.currentSuggestion, videoIDToPlay: this.state.videoIDToPlay }),
+      h(SongSuggestion, { key: 'suggestion', title: this.state.currentSuggestion, thumbnail: this.state.currentSuggestionThumbnail, votesNeeded: this.state.votesNeeded, votedMap: this.state.votedMap }),
       h(BallotBox, { key: 'ballot', ws: this.ws, voteDeadline: this.state.voteDeadline }),
       h(Player, { key: 'player', videoIDToPlay: this.state.videoIDToPlay, ws: this.ws, }),
+      h(CitizenCount, { key: 'citizen-count', citizens: this.state.citizens }),
       h(FireLayer, { key: 'fire-layer', count: this.state.fireCount }),
     );
   }
@@ -75,7 +94,6 @@ class App extends Component {
    }
 
    componentDidUpdate(prevProps) {
-     console.log("didUpdate", prevProps, this.props, ytReady);
      if (prevProps.videoIDToPlay !== this.props.videoIDToPlay && this.props.videoIDToPlay !== "") {
        const initPlayer = function(autoplay) {
          this.player = new YT.Player('player', {
@@ -129,7 +147,13 @@ class SubmitSong extends Component {
   }
 
   onChange = (evt) => {
-    this.setState({videoID: evt.currentTarget.value });
+    let ytCode = evt.currentTarget.value;
+    const match = ytCode.match(/[\?\&]v=([a-zA-Z0-9_-]+)/);
+    if (match) {
+      ytCode = match[1];
+    }
+
+    this.setState({videoID: ytCode });
   }
 
   render() {
@@ -140,7 +164,7 @@ class SubmitSong extends Component {
         h('img', { class: 'vote-icon', src: 'vote.svg' })
       ),
       h('div', { class: 'submit-song-form' },
-        h('input', { type: 'text', value: this.state.videoID, onChange: this.onChange, placeholder: 'YT video code' }),
+        h('input', { type: 'text', value: this.state.videoID, onKeyUp: this.onChange, placeholder: 'YT video code' }),
         h('button', { onClick: this.onSubmit }, 'submit'),
       )
     );
@@ -157,9 +181,14 @@ class SongSuggestion extends Component {
   render() {
     if (this.props.title === '' || this.props.thumbnail === '') { return null; }
 
+    const yayVotes = Object.values(this.props.votedMap).filter((vote) => vote).length;
+    const nayVotes = Object.values(this.props.votedMap).filter((vote) => !vote).length;
+
     return h('div', { class: 'song-preview' },
       h('img', { src: this.props.thumbnail, class: 'thumbnail' }),
       h('h4', null, this.props.title),
+      h('h4', null, `Votes required: ${this.props.votesNeeded}`),
+      h('h4', null, `Yay: ${yayVotes} Nay: ${nayVotes}`),
     );
   }
 }
@@ -182,6 +211,12 @@ class BallotBox extends Component {
   }
 }
 
+class CitizenCount extends Component {
+  render () {
+    return h('div', { class: 'citizen-count' }, `Population: ${this.props.citizens}`);
+  }
+}
+
 class FireLayer extends Component {
   constructor() {
     super();
@@ -189,7 +224,6 @@ class FireLayer extends Component {
   }
 
   render() {
-    console.log("###", this.xCoords);
     while (this.xCoords.length < this.props.count) {
       this.xCoords.push(Math.floor(Math.random() * (window.innerWidth - 0)) + 0);
     }

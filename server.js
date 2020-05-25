@@ -21,7 +21,7 @@ let AppState = {
   citizens: 0,
   votedMap: {},
   fireCount: 0,
-}
+};
 
 const ClientActions = {
   SuggestSong: 11,
@@ -42,6 +42,7 @@ const broadcast = () => {
 let votingTimer = null;
 let pendingVideoID = "";
 let durationMS = 0;
+let blacklist = [];
 
 wss.on('connection', function connection(socket) {
   const ws = socket;
@@ -54,12 +55,29 @@ wss.on('connection', function connection(socket) {
   broadcast();
 
   ws.on('message', function message(data) {
+    if (data === "reset") {
+      AppState = {
+        currentSuggestion: "",
+        currentSuggestionThumbnail: "",
+        videoIDToPlay: "",
+        lastVoteTime: 0,
+        votesNeeded: 0,
+        voteDeadline: 0,
+        citizens: 0,
+        votedMap: {},
+        fireCount: 0,
+      };
+      broadcast();
+      return;
+    }
+
     const message = JSON.parse(data);
 
     let votes;
     switch (message.action) {
       case ClientActions.SuggestSong:
-        if (!/[a-zA-Z0-9_-]{11}/.test(message.videoID)) { break; }
+        if (!/[a-zA-Z0-9_-]{1,11}/.test(message.videoID)) { break; }
+        if (blacklist.includes(message.videoID)) { break; }
         pendingVideoID = message.videoID;
         exec(`curl "https://www.youtube.com/watch?v=${message.videoID}"`, (error, stdout, stderr) => {
           const ytPage = new JSDOM(stdout);
@@ -112,6 +130,8 @@ wss.on('connection', function connection(socket) {
           let yayVotes = votes.filter((vote) => vote).length;
           if (yayVotes >= AppState.votesNeeded) {
             console.log("Vote Has Passed");
+            blacklist.unshift(pendingVideoID);
+            blacklist = blacklist.slice(0, 5);
             AppState = {
               ...AppState,
               currentSuggestion: "",
@@ -160,7 +180,8 @@ wss.on('connection', function connection(socket) {
             break;
           }
 
-        break;
+          broadcast();
+          break;
 
         case ClientActions.VoteNay:
           if (AppState.votedMap[this.id] !== undefined) { break; }
@@ -184,6 +205,7 @@ wss.on('connection', function connection(socket) {
             }
             break;
           }
+          broadcast();
           break;
 
         case ClientActions.VoteFire:
