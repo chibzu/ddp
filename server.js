@@ -57,13 +57,13 @@ wss.on('connection', function connection(socket) {
   ws.on('message', function message(data) {
     if (data === "reset") {
       AppState = {
+        ...AppState,
         currentSuggestion: "",
         currentSuggestionThumbnail: "",
         videoIDToPlay: "",
         lastVoteTime: 0,
         votesNeeded: 0,
         voteDeadline: 0,
-        citizens: 0,
         votedMap: {},
         fireCount: 0,
       };
@@ -148,13 +148,13 @@ wss.on('connection', function connection(socket) {
             }
             setTimeout(() => {
               AppState = {
+                ...AppState,
                 currentSuggestion: "",
                 currentSuggestionThumbnail: "",
                 videoIDToPlay: "",
                 lastVoteTime: 0,
                 votesNeeded: 0,
                 voteDeadline: 0,
-                citizens: 0,
                 votedMap: {},
                 fireCount: 0,
               }

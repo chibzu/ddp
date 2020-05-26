@@ -187,7 +187,7 @@ class SongSuggestion extends Component {
     return h('div', { class: 'song-preview' },
       h('img', { src: this.props.thumbnail, class: 'thumbnail' }),
       h('h4', null, this.props.title),
-      h('h4', null, `Votes required: ${this.props.votesNeeded}`),
+      h('h4', null, `Yay votes required: ${this.props.votesNeeded}`),
       h('h4', null, `Yay: ${yayVotes} Nay: ${nayVotes}`),
     );
   }
